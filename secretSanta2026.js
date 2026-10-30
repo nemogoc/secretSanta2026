@@ -175,21 +175,47 @@ function generateAssignments(
 // EMAIL SENDING
 // ------------------------------
 
-async function sendEmails(allAssignments) {
+async function sendEmails(firstDrawAssignments, secondDrawAssignments) {
   for (const person of participants) {
     const { name, email } = person;
-    const gifts = allAssignments[name].join(", ");
+
+    const firstDrawRecipient = firstDrawAssignments[name]?.[0];
+    const secondDrawRecipient = secondDrawAssignments[name]?.[0];
+
+    // Build the email body with clearly labeled assignments.
+    let emailBody = `Hi ${name}!\n\n`;
+
+    emailBody += `Your Secret Santa assignment:\n\n`;
+    emailBody += `${firstDrawRecipient}\n`;
+
+    // Only include Draw 2 if this person participated in it.
+    if (secondDrawRecipient) {
+      emailBody += `Mom's Draw: ${secondDrawRecipient}\n`;
+    }
+
+    emailBody += `\nKeep it secret! 🎁`;
 
     const message = {
       from: "Secret Santa <you@example.com>",
       to: email,
-      subject: "🎄 Your Secret Santa Assignments!",
-      text: `Hi ${name}! You are giving gifts to: ${gifts}. Keep it secret! 🎁`
+      subject: "🎄 Your Secret Santa Assignment!",
+      text: emailBody
     };
 
     try {
       await transporter.sendMail(message);
-      console.log(`Sent email to ${name} giving to ${gifts}`);
+
+      console.log(`Sent email to ${name}` );
+      
+      //uncomment below for spoilers in console
+      /*
+      console.log(
+        `Sent email to ${name}: Draw 1 = ${firstDrawRecipient}` +
+        (secondDrawRecipient
+          ? `, Draw 2 = ${secondDrawRecipient}`
+          : "")
+      );
+      */
     } catch (err) {
       console.error(`❌ Failed to send to ${name}:`, err);
     }
@@ -249,27 +275,12 @@ async function sendEmails(allAssignments) {
       secondDrawExclusions
     );
 
-    // COMBINE ASSIGNMENTS
-    // Participants in both draws get two recipients.
-    // Participants excluded from the second draw get one recipient.
-
-    const allAssignments = {};
-
-    for (const person of participants) {
-      const name = person.name;
-
-      allAssignments[name] = [
-        ...(firstDrawAssignments[name] ?? []),
-        ...(secondDrawAssignments[name] ?? [])
-      ];
-    }
-
     // Both draws have succeeded.
     // Only now do we start sending emails.
 
     console.log("Both draws succeeded. Sending emails...");
 
-    await sendEmails(allAssignments);
+    await sendEmails(firstDrawAssignments, secondDrawAssignments);
 
   } catch (err) {
     console.error(
