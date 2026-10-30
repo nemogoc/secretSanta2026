@@ -1,4 +1,7 @@
-emailList.txt
+# config files
+config.js
+!config.js.example
+
 node_modules/
 *.db
 *.csv

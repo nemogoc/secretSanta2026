@@ -1,37 +1,18 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import {
+  participants,
+  secondDrawExcludedParticipants,
+  exclusions,
+  giveCounts
+} from './config.js';
+
 import nodemailer from 'nodemailer';
 
 // ------------------------------
 // CONFIGURATION
 // ------------------------------
-
-const participants = [
-  { name: "Example1", email: "example1@example.org" },
-  { name: "Example2", email: "example2@example.org" },
-  { name: "Example3", email: "example3@example.org" },
-  { name: "Example4", email: "example4@example.org" },
-  { name: "Example5", email: "example5@example.org" }
-];
-
-// Participants who participate in the first draw only.
-// Change this list as needed.
-const secondDrawExcludedParticipants = ["Example4", "Example5"];
-
-const exclusions = {
-  Example1: ["Example2"],
-  Example2: ["Example1"]
-};
-
-// Each person gives THIS many gifts in each draw they participate in.
-const giveCounts = {
-  Example1: 1,
-  Example2: 1,
-  Example3: 1,
-  Example4: 1,
-  Example5: 1
-};
 
 // Email config — retain your existing SMTP credentials.
 const transporter = nodemailer.createTransport({
@@ -196,7 +177,7 @@ async function sendEmails(firstDrawAssignments, secondDrawAssignments) {
     emailBody += `\nKeep it secret! 🎁`;
 
     const message = {
-      from: "Secret Santa <you@example.com>",
+      from: `Secret Santa <${process.env.GMAIL_USER}>`,
       to: email,
       subject: "🎄 Your Secret Santa Assignment!",
       text: emailBody

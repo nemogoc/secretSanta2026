@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "dependencies": {
     "dotenv": "^18.0.9",
     "nodemailer": "^10.3.1"
