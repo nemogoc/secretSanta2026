@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import { readFile, writeFile } from 'node:fs/promises';
+
 import {
   participants,
   secondDrawExcludedParticipants,
@@ -9,6 +11,66 @@ import {
 } from './config.js';
 
 import nodemailer from 'nodemailer';
+
+// ------------------------------
+// PREVIOUS YEAR'S ASSIGNMENTS
+// ------------------------------
+
+const previousPicksPath = new URL(
+  './previousPicks.json',
+  import.meta.url
+);
+
+async function loadPreviousPicks() {
+  try {
+    const data = await readFile(previousPicksPath, 'utf8');
+    const picks = JSON.parse(data);
+
+    console.log("Loaded previous picks from previousPicks.json");
+
+    return picks;
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      console.log(
+        "No previous picks file found. Using existing exclusions only."
+      );
+
+      return {};
+    }
+
+    throw new Error(
+      `Failed to load previous picks: ${err.message}`
+    );
+  }
+}
+
+async function saveCurrentPicks(assignments) {
+  await writeFile(
+    previousPicksPath,
+    JSON.stringify(assignments, null, 2),
+    'utf8'
+  );
+
+  console.log("Saved current assignments to previousPicks.json");
+}
+
+function mergeExclusions(...exclusionSets) {
+  const merged = {};
+
+  for (const exclusionSet of exclusionSets) {
+    for (const [giver, receivers] of Object.entries(exclusionSet)) {
+      merged[giver] ??= [];
+
+      for (const receiver of receivers) {
+        if (!merged[giver].includes(receiver)) {
+          merged[giver].push(receiver);
+        }
+      }
+    }
+  }
+
+  return merged;
+}
 
 // ------------------------------
 // CONFIGURATION
@@ -211,43 +273,45 @@ async function sendEmails(firstDrawAssignments, secondDrawAssignments) {
 
 (async () => {
   try {
+    // LOAD PREVIOUS YEAR'S PICKS
+
+    const previousPicks = await loadPreviousPicks();
+
+    // Combine the original exclusions with last year's assignments.
+    // This prevents a giver from receiving the same recipient
+    // in consecutive years.
+
+    const currentExclusions = mergeExclusions(
+      exclusions,
+      previousPicks
+    );
+
     // FIRST DRAW
-    // All participants take part, using the original exclusions.
+    // All participants take part.
 
     console.log("Generating first-draw assignments...");
 
     const firstDrawAssignments = generateAssignments(
       participants,
-      exclusions
+      currentExclusions
     );
 
     // SECOND DRAW
-    // Remove the configured participants.
+    // Remove configured participants.
 
     const secondDrawParticipants = participants.filter(
       person =>
         !secondDrawExcludedParticipants.includes(person.name)
     );
 
-    // Copy the original exclusions so the first draw remains unchanged.
+    // Start with the original exclusions AND previous year's picks.
+    // Then add this year's first-draw assignments to prevent duplicates
+    // across the two draws.
 
-    const secondDrawExclusions = Object.fromEntries(
-      Object.entries(exclusions).map(
-        ([giver, receivers]) => [giver, [...receivers]]
-      )
-    );
-
-    // Add first-draw assignments to the second-draw exclusions.
-    // Anyone who received a person in the first draw cannot receive
-    // that same person again from the same giver in the second draw.
-
-    for (const [giver, receivers] of Object.entries(
+    const secondDrawExclusions = mergeExclusions(
+      currentExclusions,
       firstDrawAssignments
-    )) {
-      secondDrawExclusions[giver] ??= [];
-
-      secondDrawExclusions[giver].push(...receivers);
-    }
+    );
 
     console.log("Generating second-draw assignments...");
 
@@ -256,16 +320,40 @@ async function sendEmails(firstDrawAssignments, secondDrawAssignments) {
       secondDrawExclusions
     );
 
-    // Both draws have succeeded.
-    // Only now do we start sending emails.
+    // COMBINE ASSIGNMENTS
+    // Everyone gets their assignments from both draws, if applicable.
+
+    const allAssignments = {};
+
+    for (const person of participants) {
+      const name = person.name;
+
+      allAssignments[name] = [
+        ...(firstDrawAssignments[name] ?? []),
+        ...(secondDrawAssignments[name] ?? [])
+      ];
+    }
+
+    // SAVE THE RESULTS
+    // Both draws must succeed before the history file is updated.
+    // If either draw fails, execution jumps to catch and the old
+    // previousPicks.json remains unchanged.
+
+    await saveCurrentPicks(allAssignments);
+
+    // SEND EMAILS
+    // Both draws have succeeded and the results have been saved.
 
     console.log("Both draws succeeded. Sending emails...");
 
-    await sendEmails(firstDrawAssignments, secondDrawAssignments);
+    await sendEmails(
+      firstDrawAssignments,
+      secondDrawAssignments
+    );
 
   } catch (err) {
     console.error(
-      "❌ Secret Santa stopped. No emails were sent if assignment generation failed:",
+      "❌ Secret Santa stopped:",
       err
     );
 

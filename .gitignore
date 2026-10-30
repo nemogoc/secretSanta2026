@@ -2,6 +2,9 @@
 config.js
 !config.js.example
 
+previousPicks.json
+!previousPicks.json.example
+
 node_modules/
 *.db
 *.csv
